@@ -1,0 +1,4 @@
+\beamer@sectionintoc {1}{Introduction}{2}{0}{1}
+\beamer@sectionintoc {2}{Methodology}{12}{0}{2}
+\beamer@sectionintoc {3}{Results}{19}{0}{3}
+\beamer@sectionintoc {4}{Conclusion}{24}{0}{4}

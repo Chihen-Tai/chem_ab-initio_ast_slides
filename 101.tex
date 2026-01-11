@@ -1,0 +1,743 @@
+\documentclass[12pt]{beamer}
+\usetheme{Madrid}
+\usefonttheme{serif}
+
+% ===== XeLaTeX 專用 =====
+\usepackage{iftex}
+\ifPDFTeX
+  \errmessage{請用 XeLaTeX 編譯（latexmk -xelatex）}
+\fi
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+%               ^^^^^^^^^^^^^^^  要有這個% 行號樣式調整（讓它更像 paper）
+\SetAlgoNlRelativeSize{-1} % 行號縮小一點
+\SetNlSty{}{}{\kern0.4em}  % 只顯示數字，不加括號，後面留一點空隙
+% ===== 字體：英=Times New Roman；中=Noto Serif CJK TC =====
+\usepackage{fontspec}
+\usepackage{xeCJK}
+%\setmainfont{TeX Gyre Pagella}
+\setmainfont{Times New Roman}
+\setCJKmainfont{Noto Serif CJK TC}
+\xeCJKsetup{PunctStyle=plain}
+
+% ===== 常用套件 =====
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{graphicx,booktabs,hyperref,multicol}
+
+\hypersetup{colorlinks=true,linkcolor=.,urlcolor=.,citecolor=.}
+
+% ===== Beamer 外觀 =====
+% ===== Beamer 外觀 =====
+% ===== Beamer 外觀 =====
+\setbeamertemplate{itemize items}[ball]
+\setbeamertemplate{enumerate items}[circle]
+\setbeamertemplate{caption}[numbered]
+\setbeamertemplate{navigation symbols}{}
+
+% --- footer 顏色設定 ---
+\setbeamercolor{footleft}{fg=white,bg=blue!60!black}   % 深藍底 + 白字
+\setbeamercolor{footright}{fg=blue!70!black,bg=blue!10!white} % 很淺藍底 + 深藍字
+
+
+% --- footer 版面：左邊 Section，右邊頁碼，各佔一半 ---
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    % 左：目前 section 名稱
+    \begin{beamercolorbox}[wd=.5\paperwidth,ht=2.5ex,dp=1.2ex,center]{footleft}%
+      \insertsection
+    \end{beamercolorbox}%
+    % 右：頁碼/總頁數
+    \begin{beamercolorbox}[wd=.5\paperwidth,ht=2.5ex,dp=1.2ex,center]{footright}%
+      \insertframenumber{} / \inserttotalframenumber
+    \end{beamercolorbox}%
+  }%
+  \vskip0pt%
+}
+% ===== Section 開頭自動顯示這張 =====
+\AtBeginSection[]{
+  \begin{frame}{Outline}
+    \tableofcontents[currentsection]
+  \end{frame}
+}
+% ===== 文件資訊 =====
+\title{Accelerating \textit{ab initio} real-space electronic structure calculations\\
+for low-dimensional materials using an atom-sphere grid truncation method}
+\author[ChihenTai]{Speaker \quad 戴致恩}
+\date{\today}
+
+\begin{document}
+
+% ===== 封面 =====
+\begin{frame}[plain]
+  \centering
+  \vspace{3mm}
+
+  % paper 標題截圖
+  \includegraphics[width=0.95\textwidth]{information.png}
+
+  \vspace{6mm}
+  \includegraphics[width=0.80\textwidth]{instutition.png}
+
+  % 期刊圖片（縮小放在下面）
+  \includegraphics[width=0.30\textwidth]{journals.png}
+
+  \vspace{6mm}
+
+  % 講者資訊（名字比較小）
+  \small
+  Speaker: 戴致恩 \\[2mm]
+  2025/11/20
+
+\end{frame}
+
+% ===== 大綱 =====
+% \begin{frame}{Outline}
+%   \tableofcontents
+% \end{frame}
+
+% ==============================
+%        Introduction
+% ==============================
+\section{Introduction}
+\begin{frame}{Hohenberg–Kohn Theorem}
+
+\vspace{0.5em}
+
+If $E$ is the lowest energy of the system, then $E$ is a functional of the electron density:
+\[
+E = F[n]
+\]
+
+\vspace{1.0em}
+
+\begin{itemize}
+  \item We avoid solving the full many-electron wavefunction 
+      $\Psi(\mathbf r_1,\ldots,\mathbf r_N)$ and work with the electron density function $n(\mathbf r)$
+\end{itemize}
+
+\vspace{1.0em}
+
+DFT (Hohenberg–Kohn):
+\[
+E = F[n(\mathbf r)]
+\]
+
+\end{frame}
+
+\begin{frame}{Kohn–Sham Equation}
+
+\vspace{0.2em}
+
+Kohn–Sham equation is a single-particle equation\\
+electron–electron interactions are included through the density
+
+
+\vspace{0.2em}
+
+\[
+\hat{H}_{\mathrm{KS}}[\rho]\;|\psi_n\rangle = \varepsilon_n\,|\psi_n\rangle
+\]
+
+\vspace{0.2em}
+
+\begin{small}
+where $|\psi_n\rangle$ and $\varepsilon_n$ are the $n$th KS eigenstate and eigenvalue
+, $\rho$ is the electron density, 
+$\hat{H}_{\mathrm{KS}}$ is the Hamiltonian operator\\
+\end{small}
+\vspace{0.4em}
+
+Electron density:
+\[
+  \rho(\mathbf{r}) = \sum_{n} f_n\,|\psi_n(\mathbf{r})|^2
+\]
+\vspace{0.4em}
+
+\small
+where $f_n$ is the Fermi–Dirac occupation function\\
+$\psi_n(\mathbf{r}) = \langle \mathbf{r} | \psi_n \rangle$ is the real-space wavefunction
+\normalsize
+\end{frame}
+\begin{frame}{Kohn–Sham Equation}
+Hamiltonian in the Kohn–Sham equation:
+\vspace{-1em}
+\begin{center}
+\[
+  \hat{H}_{\mathrm{KS}}[\rho]
+  =
+  \hat{T}
+  + \hat{V}_{\mathrm{ion}}
+  + \hat{V}_{\mathrm{H}}[\rho]
+  + \hat{V}_{\mathrm{XC}}[\rho]
+\]
+\end{center}
+\begin{align*}
+ &\hat{T}: \text{ kinetic energy operator} \\
+ &\hat{V}_{\mathrm{ion}}: \text{ ionic potential} \\
+ &\hat{V}_{\mathrm{H}}[\rho]: \text{ Hartree potential} \\
+ &\hat{V}_{\mathrm{XC}}[\rho]: \text{ exchange–correlation potential}
+\end{align*}
+
+Self-consistent solution procedure:
+Iterate KS equations until both the electron density and the  
+total energy are converged
+
+\end{frame}
+\begin{frame}{Real–space KS-DFT}
+
+\begin{itemize}
+    \item KS wavefunctions, electron density, and potentials
+          are represented directly on a spatial grid
+          \vspace{0.5em}
+
+    \item Accuracy is controlled by the real-space resolution (grid spacing)
+          \vspace{0.5em}
+
+    \item Naturally highly parallelizable across many CPU cores
+\end{itemize}
+
+\end{frame}
+\begin{frame}{Uniform Real–space Grid Representation}
+
+Wavefunction on a uniform grid:
+\[
+  |\psi_n\rangle \;\approx\;
+  \sum_{\mu=1}^{N_b} \omega_\mu\,\psi_{n\mu}\,|\mathbf r_\mu\rangle
+\]
+
+\small
+where\quad
+$\psi_{n\mu} \equiv \psi_n(\mathbf r_\mu)
+= \langle \mathbf r_\mu | \psi_n \rangle$
+\normalsize
+
+\vspace{0.5em}
+
+\begin{center}
+\small
+$\{\mathbf r_\mu\}$: grid points \qquad
+$\omega_\mu$: volume weight of each point
+\end{center}
+\vspace{0.5em}
+Electron density on the grid:
+\[
+  \rho(\mathbf r_\mu) = \sum_{n} f_n\, |\psi_{n\mu}|^2
+\]
+
+\end{frame}
+\begin{frame}{Discrete Kohn–Sham Equation}
+
+Discrete Kohn–Sham equation:
+\[
+  \mathbf{H}[\rho]\,\Psi_n = \epsilon_n\,\Psi_n
+\]
+
+\small
+\noindent
+where\quad
+$\Psi_n \equiv [\,\psi_{n1},\,\psi_{n2},\,\ldots,\,\psi_{nN_b}\,]^{T}$
+\;\;is the $n$th discrete wavefunction (eigenvector).
+\normalsize
+
+\vspace{0.5em}
+
+Hamiltonian matrix elements:
+\[
+\begin{aligned}
+H_{\mu\nu}[\rho]
+&\equiv H[\rho](\mathbf r_\mu, \mathbf r_\nu)
+= \langle \mathbf r_\mu \,|\, \hat H_{\mathrm{KS}}[\rho] \,|\, \mathbf r_\nu \rangle\,\omega_\nu \\[0.5em]
+&= T(\mathbf r_\mu, \mathbf r_\nu)
++ V_H[\rho](\mathbf r_\mu)\delta_{\mu\nu}
++ V_{XC}[\rho](\mathbf r_\mu)\delta_{\mu\nu} \\[0.5em]
+&\quad +
+\underbrace{
+V_{\mathrm{loc}}(\mathbf r_\mu)\delta_{\mu\nu}
++ V_{\mathrm{nl}}(\mathbf r_\mu,\mathbf r_\nu)
+}_{\text{$V_{\mathrm{ion}}(\mathbf r_\mu,\mathbf r_\nu)$}}
+\end{aligned}
+\]
+
+\end{frame}
+\begin{frame}{Uniform Grids in Real-space DFT}
+
+\begin{itemize}
+    \item A uniform 3D grid is constructed in the simulation cell
+          \vspace{0.5em}
+
+    \item Number of grid points is determined by lattice vectors
+          $(\mathbf{a}, \mathbf{b}, \mathbf{c})$ and the spacing $h$
+          \vspace{0.5em}
+
+    \item Grid points fill the entire simulation cell,
+          including large vacuum regions
+          \vspace{0.9em}
+
+    \item Works for both boundary types:
+          \begin{itemize}
+              \item PBC: periodic systems (solids, 2D materials, nanotubes)
+              \item DBC: isolated systems (molecules, clusters)
+          \end{itemize}
+\end{itemize}
+
+\end{frame}
+\begin{frame}{Boundary Conditions in Real–space DFT}
+
+% ---------- PBC ----------
+\begin{columns}[T,totalwidth=\textwidth]
+  % 左：PBC 文字
+  \begin{column}{0.65\textwidth}
+    Periodic Boundary Condition (PBC)
+    \begin{itemize}
+        \item System repeats periodically (like an infinite crystal)
+        \item $\psi(\mathbf r + \mathbf R) = \psi(\mathbf r)$
+        \item Used for solids, 2D materials, nanotubes
+    \end{itemize}
+  \end{column}
+  % 右：PBC 圖（往上移一點）
+  \begin{column}{0.35\textwidth}
+    \vspace{-0.6em} % 往上拉
+    \begin{flushright}
+      \includegraphics[width=0.75\columnwidth]{pbc.png} % 換成你的 PBC 圖檔
+    \end{flushright}
+  \end{column}
+\end{columns}
+
+\vspace{0.6em}
+
+% ---------- DBC ----------
+\begin{columns}[T,totalwidth=\textwidth]
+  % 左：DBC 文字
+  \begin{column}{0.65\textwidth}
+    Dirichlet Boundary Condition (DBC)
+    \begin{itemize}
+        \item Wavefunction is set to zero at the boundary
+        \item Used for isolated systems: molecules, clusters
+    \end{itemize}
+  \end{column}
+
+  % 右：DBC 圖（也往上移一點）
+  \begin{column}{0.35\textwidth}
+    \vspace{-0.3em} % 往上拉
+    \begin{flushright}
+      \includegraphics[width=0.75\columnwidth]{dbc.png} % 換成你的 DBC 圖檔
+    \end{flushright}
+  \end{column}
+\end{columns}
+
+\end{frame}
+
+% \begin{frame}{Full Uniform Grids in Real-space DFT}
+% Performs poorly in the following cases:
+%   \begin{itemize}
+%               \item low-dimensional materials (2D sheets, nanotubes)
+%               \item isolated clusters (C$_{60}$, nanoparticles)
+%               \item porous materials (MOFs, DSSCs)
+%           \end{itemize}
+% \begin{center}
+% \includegraphics[width=0.7\textwidth]{full_grid.png}
+% \end{center}
+% \end{frame}
+%
+
+\begin{frame}{Uniform Grids Are Wasteful}
+
+\begin{columns}[c] % c = 垂直置中，t = 上對齊
+  \column{0.67\textwidth}
+    Many materials contain large vacuum regions:
+    \begin{itemize}
+        \item 0D clusters (C$_{60}$, nanoparticles)
+        \item 1D nanotubes (SWNT)
+        \item 2D layers with vacuum (graphene, tBLG)
+        \item 3D porous materials (MOFs, DSSCs)
+    \end{itemize}
+
+  \column{0.33\textwidth}
+    \centering
+    \includegraphics[width=0.7\textwidth]{full_grid_t.jpg}
+    % \vspace{0.3em}
+    % \scriptsize Full uniform grid covering both atoms and vacuum.
+\end{columns}
+\vspace{0.6em}
+    Problem (atoms are not average distribution):
+    \vspace{0.2em}
+
+    \begin{itemize}
+        \item Uniform grids waste many points in empty space
+        \item Leads to slower computation and high memory usage
+    \end{itemize}
+\end{frame}
+
+% \begin{frame}{Comparison to Other Basis Sets}
+
+% Atomic orbital basis:
+% \begin{itemize}\itemsep4pt
+%     \item Small and efficient, but accuracy is limited by basis quality
+% \end{itemize}
+
+% \vspace{0.4em}
+
+% Plane-wave basis:
+% \begin{itemize}\itemsep4pt
+%     \item Accuracy increases with more plane waves. ideal for periodic systems, but large vacuum requires many extra waves
+% \end{itemize}
+
+% \vspace{0.4em}
+
+% Real-space finite differences:
+% \begin{itemize}\itemsep4pt
+%     \item Simple to implement and supports various boundary conditions, but makes useless grids in vacuum regions
+% \end{itemize}
+
+% \end{frame}
+% \begin{frame}{Existing Methods}
+
+% Finite-element / adaptive grids
+% \begin{itemize}
+%     \item Dense grids near atoms, sparse in vacuum
+%     \item Setup and implementation are complicated
+% \end{itemize}
+
+% \vspace{0.8em}
+
+% Wavelet multi-resolution
+% \begin{itemize}
+%     \item High resolution near atoms, low resolution in empty regions
+%     \item Basis construction is complex
+% \end{itemize}
+
+% \vspace{0.8em}
+
+% Atomic-orbital basis
+% \begin{itemize}
+%     \item Naturally localized near atoms
+%     \item Accuracy depends strongly on basis choice
+% \end{itemize}
+
+% \end{frame}
+
+% ==============================
+%        Methodology
+% ==============================
+\section{Methodology}
+
+% ---------- AST----------
+\begin{frame}{Atom-Sphere Truncation (AST)}
+        Core concept: Electrons are mainly located around atoms
+
+        \vspace{0.6em}
+
+        \begin{itemize}
+            \item Define a cutoff radius $R_c$ around each atom
+            \item Works for both PBC and DBC
+            \item Fewer grid points and faster SCF steps
+            \item Energy difference converges to within 2 meV/atom
+        \end{itemize}
+        \vspace{0.5em}
+          \begin{center}
+              \includegraphics[width=0.7\textwidth]{purpose.jpg}
+          \end{center}
+
+\end{frame}
+\begin{frame}{AST definitions}
+
+AST grid set
+\[
+\Omega_{\mathrm{AST}}
+= 
+\bigcup_a 
+\left\{
+  \mathbf r_\mu : 
+  \|\mathbf r_\mu - \mathbf R_a\| \le R_c
+\right\}.
+\]
+
+\vspace{0.6em}
+Truncated wavefunction
+\[
+\psi_n^\mu =
+\begin{cases}
+\psi_n(\mathbf r_\mu) & \mathbf r_\mu \in \Omega_{\mathrm{AST}} \\[6pt]
+0 & \text{otherwise}
+\end{cases}
+\]
+
+\vspace{0.6em}
+
+\footnotesize
+$\mathbf r_\mu$: grid point \quad
+$\mathbf R_a$: atom position \quad
+$R_c$: cutoff radius
+\normalsize
+
+\end{frame}
+
+
+\begin{frame}{AST Grids in Real Space}
+
+\begin{itemize}
+    \item The AST algorithm keeps only grid points within a cutoff radius $R_c$
+          around each atom
+    \vspace{0.6em}
+    \item This removes most vacuum grid points and reduces the computational cost
+\end{itemize}
+
+\begin{center}
+\includegraphics[width=0.80\textwidth]{ast_grid.png}
+\end{center}
+
+\end{frame}
+
+\begin{frame}{Details of Algorithms and Implementation}
+
+\begin{columns}[T,onlytextwidth]  % T = top align, onlytextwidth 比較好排
+
+  \begin{column}{0.58\textwidth}
+    \centering
+    \includegraphics[width=0.6\textwidth]{redscf.jpeg}
+  \end{column}
+
+  \begin{column}{0.42\textwidth}
+    \footnotesize
+    \begin{itemize}
+        \item Exchange–correlation:  
+              PBE functional (via \texttt{libxc})
+        \vspace{0.3em}
+        \item Eigenproblem solver:  
+              CheFSI 
+        \vspace{0.3em}
+    \end{itemize}
+    \vspace{0.5em}
+    \centering
+    %\includegraphics[width = 0.7\textwidth]{ast_al.png}
+\end{column}
+
+\end{columns}
+
+\end{frame}
+
+
+\begin{frame}{Algorithm 1: Generation of Full Uniform Grids}
+
+\scriptsize
+\setlength{\algomargin}{1.8em}
+
+\begin{algorithm}[H]
+\DontPrintSemicolon
+\KwData{Lattice vectors ($\mathbf{a}, \mathbf{b}, \mathbf{c}$), grid spacing $h$}
+\KwResult{$N_b, N_x, N_y, N_z, h_x, h_y, h_z, \{\mathbf r_\mu\}$}
+
+\BlankLine
+\LinesNotNumbered
+\textit{// Calculate the number of full grids}\;
+\LinesNumbered
+$N_x = \left\lfloor \dfrac{|\mathbf{a}|}{h} \right\rfloor,\quad
+ N_y = \left\lfloor \dfrac{|\mathbf{b}|}{h} \right\rfloor,\quad
+ N_z = \left\lfloor \dfrac{|\mathbf{c}|}{h} \right\rfloor$\;
+$N_b = N_x N_y N_z$\;
+
+\BlankLine
+\LinesNotNumbered
+\textit{// Reset the grid spacings}\;
+\LinesNumbered
+$h_x = |\mathbf{a}|/N_x,\quad
+ h_y = |\mathbf{b}|/N_y,\quad
+ h_z = |\mathbf{c}|/N_z$\;
+
+\BlankLine
+\LinesNotNumbered
+\textit{// Loop over 3D grid points}\;
+\LinesNumbered
+\For{$k = 1$ \KwTo $N_z$}{
+  \For{$j = 1$ \KwTo $N_y$}{
+    \For{$i = 1$ \KwTo $N_x$}{
+      \LinesNotNumbered
+      \textit{// Map integer coordinates to in-memory index}\;
+      \LinesNumbered
+      $\mu = i + N_x (j-1) + N_x N_y (k-1)$\;
+
+      \LinesNotNumbered
+      \textit{// Store grid position}\;
+      \LinesNumbered
+      $\mathbf r_\mu =
+        \left(\frac{\mathbf{a}}{N_x},\, \frac{\mathbf{b}}{N_y},\, \frac{\mathbf{c}}{N_z}\right)
+        (i,j,k)^T$\;
+    }
+  }
+}
+\BlankLine
+
+\textbf{return} $N_b, N_x, N_y, N_z, h_x, h_y, h_z, \{\mathbf r_\mu\}$\;
+
+\end{algorithm}
+
+\end{frame}
+
+
+\begin{frame}{Algorithm 2: Generation of the atom-sphere truncation
+(AST) grid size and coordinates.}
+\scriptsize
+\setlength{\algomargin}{1.8em}  % 調大一點就會整塊往右移
+\begin{algorithm}[H]
+\DontPrintSemicolon
+\KwData{Full-grid count and positions $N_b,\{\mathbf r_\mu\}$;
+       number of atoms $N_a$; atom positions $\mathbf R_a$;
+       cutoff radius $R_c$}
+\KwResult{$\Omega_{\mathrm{AST}},\, N_b^{\mathrm{AST}}$}
+
+\textit{// Initialize AST grids}\;
+$\Omega_{\mathrm{AST}} = \varnothing$\;
+$N_b^{\mathrm{AST}} = 0$\;
+
+\For{$\mu = 1$ \KwTo $N_b$}{
+  
+  \textit{// Select the grid positions}\;
+  \For{$a = 1$ \KwTo $N_a$}{
+    
+    \If{$\|\mathbf r_\mu - \mathbf R_a\| \le R_c$}{
+      
+      \textit{// Store grid point}\;
+      $\Omega_{\mathrm{AST}} = \Omega_{\mathrm{AST}} \cup \{\mathbf r_\mu\}$\;
+      $N_b^{\mathrm{AST}} = N_b^{\mathrm{AST}} + 1$\;
+    }
+  }
+}
+
+\Return{$\Omega_{\mathrm{AST}},\, N_b^{\mathrm{AST}}$}
+
+\end{algorithm}
+
+\end{frame}
+% ==============================
+%        Results
+% ==============================
+\section{Results}
+
+\begin{frame}{Isolated Cluster Systems}
+
+\begin{itemize}
+    \item Tested: C$_{60}$ and three B$_{84}$ structures
+    \vspace{0.3em}
+    \item Energy difference converges to within 2 meV at $R_c \approx 4.0$ Å
+    \vspace{0.3em}
+    \item Grid reduction: 35–73\%
+    \vspace{0.3em}
+    \item Time reduction per SCF step: 41–71\%
+\end{itemize}
+
+\begin{center}
+\includegraphics[width=0.70\textwidth]{cluster_result.png}
+\end{center}
+
+\end{frame}
+
+\begin{frame}{Low-dimensional and Adsorption Systems}
+
+\begin{itemize}
+    \item Tested: SWNT (1D), tBLG (2D), B$_{36}$ cluster, hexane/graphene
+    \vspace{0.3em}
+    \item Energy difference converges to within 2 meV/atom at $R_c \approx 3.6$ Å
+    \vspace{0.3em}
+    \item Grid reduction: 30–46\%
+    \vspace{0.3em}
+    \item Time reduction per SCF step: 37–52\%
+\end{itemize}
+
+\begin{center}
+\includegraphics[width=0.65\textwidth]{extended_results.png}
+\end{center}
+
+\end{frame}
+\begin{frame}{MOFs}
+
+\begin{itemize}
+    \item Systems: IRMOF-1(a) and IRMOF-10(b)
+    \vspace{0.3em}
+    \item Energy difference converges to within 2 meV/atom at $R_c \approx 3.6$ Å
+    \vspace{0.3em}
+    \item Grid reduction: 36\% (a)\& 50\% (b)
+    \vspace{0.3em}
+    \item Time reduction per SCF step: 36\% (a) \& 47\% (b)
+\end{itemize}
+
+\begin{center}
+\includegraphics[width=0.65\textwidth]{mof_dos.png}
+\end{center}
+\end{frame}
+\begin{frame}{Table : Efficiency comparison of Full grids vs AST}
+\scriptsize
+\renewcommand{\arraystretch}{1.3}
+\setlength{\tabcolsep}{10pt}  % ＊收一點點，比 4pt 更緊，仍然不擠壓
+
+\begin{table}
+\centering
+\begin{tabular}{l c cc cc}
+\toprule
+\textbf{Test system} &
+\textbf{Atoms} &
+\multicolumn{2}{c}{\textbf{Number of grid points}} &
+\multicolumn{2}{c}{\textbf{SCF steps [time(s)/step]}} \\
+\cmidrule(lr){3-4} \cmidrule(lr){5-6}
+ & & \textbf{Full} & \textbf{AST$^{\mathrm{a}}$} &
+     \textbf{Full} & \textbf{AST$^{\mathrm{a}}$} \\
+\midrule
+% -------- Group 1: isolated clusters --------
+C$_{60}$     & 60  & 449k  & 287k  & 30(2.2)   & 30(1.3)   \\
+B$_{84}$–1   & 84  & 1802k & 484k  & 32(14.3)  & 31(4.1)   \\
+B$_{84}$–2   & 84  & 716k  & 366k  & 32(4.2)   & 28(2.3)   \\
+B$_{84}$–3   & 84  & 927k  & 496k  & 32(6.8)   & 31(3.6)   \\
+\\[-0.8em]   % 空一組，不要增加太多 vertical space
+
+% -------- Group 2: low-dimensional systems & adsorption --------
+SWNT         & 112 & 677k  & 364k  & 41(12.0)  & 44(5.7)   \\
+tBLG         & 148 & 592k  & 413k  & 33(10.7)  & 32(6.6)   \\
+B$_{36}$     & 196 & 1109k & 602k  & 44(35.7)  & 40(19.1)  \\
+Hexane       & 80  & 435k  & 293k  & 36(4.9)   & 34(3.1)   \\
+\\[-0.8em]
+
+% -------- Group 3: MOFs --------
+IRMOF-1      & 106 & 1161k & 718k  & 85(39.2)  & 70(25.1)  \\
+IRMOF-10     & 190 & 2628k & 1319k & 81(80.3)  & 79(42.3)  \\
+\bottomrule
+\end{tabular}
+\vspace{0.4em}
+\footnotesize
+\\
+$^{\mathrm{a}}$Absolute errors for AST are below 2 meV/atom.
+
+\end{table}
+
+\end{frame}
+
+\section{Conclusion}
+\begin{frame}{Conclusion}
+The AST method improves real-space KS-DFT efficiency:
+\begin{itemize}
+    \item Reduces 30–73\% of real-space grid points by removing vacuum regions  
+\vspace{0.6em}
+\item Accelerates SCF calculations by 36–71\%, tested on clusters, nanotubes, 2D materials, and MOFs 
+
+\vspace{0.6em}
+
+\item Maintains energy accuracy within 2 meV/atom using ${R_c}$ $\approx$ 3.6–4.0 Å  
+
+\end{itemize}
+\end{frame}
+
+
+% ==============================
+%        結尾
+% ==============================
+{
+\setbeamertemplate{footline}{}  % 只在這一組花括號內關掉 footline
+
+\begin{frame}[plain]
+  \vfill
+  \centering
+  \Large Thank you！\\[12pt]
+  \vfill
+\end{frame}
+
+}
+
+\end{document}
